@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instrument Note Naming Game (Testing Mode)</title>
+    <style>
+        /* Basic styling for the game */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f4f8;
+        }
+        .container {
+            text-align: center;
+            background-color: #ffffff;
+            padding: 20px 30px;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0, 30, 80, 0.1);
+            border: 1px solid #e0e0e0;
+            width: 90%;
+            max-width: 650px;
+        }
+        h1, h2 {
+            color: #1c3d5a;
+        }
+        #score {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 220px; 
+        }
+        .btn {
+            padding: 12px 24px;
+            margin: 8px;
+            font-size: 18px;
+            border-radius: 8px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .btn:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .btn.locked {
+            background-color: #a0a0a0;
+            cursor: not-allowed;
+            color: #e0e0e0;
+        }
+        .btn.locked:hover {
+            background-color: #a0a0a0;
+            transform: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        #feedback, #progress, #timer {
+            margin-top: 15px;
+            font-size: 24px;
+            font-weight: bold;
+            min-height: 30px;
+        }
+        #progress, #timer {
+            font-size: 18px;
+            color: #555;
+        }
+        .correct { color: #28a745; }
+        .incorrect { color: #dc3545; }
+        .hidden { display: none; }
+        
+        /* Styles for the name prompt and certificate */
+        #name-prompt-container {
+            margin: 20px 0;
+        }
+        #student-name-input {
+            font-size: 16px;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            margin: 0 10px;
+        }
+        #certificate-text {
+            font-size: 1.5rem; /* Larger font for the certificate */
+            font-weight: bold;
+            color: #0056b3;
+            padding: 20px;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            background-color: #f0f8ff;
+            margin-top: 20px;
+        }
+        #failure-text {
+             font-size: 1.2rem;
+             color: #555;
+             margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Instrument Selection Screen -->
+        <div id="instrument-selection">
+            <h1>Select Your Instrument</h1>
+            <div id="instrument-buttons"></div>
+        </div>
+
+        <!-- Main Menu Screen (Level Selection) -->
+        <div id="main-menu" class="hidden">
+            <h1 id="menu-title"></h1>
+            <p>Select any level to begin testing.</p>
+            <div id="level-select"></div>
+             <button class="btn" id="back-to-instruments-btn">Back to Instruments</button>
+        </div>
+
+        <!-- Quiz Area -->
+        <div id="quiz-container" class="hidden">
+            <h1 id="quiz-title"></h1>
+            <div id="timer">Time: 0.0s</div>
+            <div id="quiz-area">
+                <div id="score"></div>
+                <div id="answer-buttons"></div>
+                <div id="feedback"></div>
+            </div>
+            <div id="progress"></div>
+            <button class="btn" id="back-to-menu-btn">Back to Levels</button>
+        </div>
+
+        <!-- Completion Screen -->
+        <div id="completion-message" class="hidden">
+            <h2 id="completion-title"></h2>
+            
+            <div id="name-prompt-container">
+                <label for="student-name-input">Enter your name for certificate:</label>
+                <input type="text" id="student-name-input" placeholder="Your Name">
+                <button id="submit-name-btn" class="btn">Create Certificate</button>
+            </div>
+
+            <p id="failure-text" class="hidden"></p>
+            <p id="certificate-text" class="hidden"></p>
+            
+            <button class="btn" id="restart-btn">Back to Levels</button>
+        </div>
+    </div>
+
+    <!-- VexFlow Library -->
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- VexFlow Setup ---
+            const { Factory, StaveNote, Formatter } = Vex.Flow;
+            const scoreDiv = document.getElementById("score");
+            const renderer = new Factory({ renderer: { elementId: 'score', width: 200, height: 220 } });
+            const context = renderer.getContext();
+            
+            // --- DOM Elements ---
+            const instrumentSelectionDiv = document.getElementById("instrument-selection");
+            const instrumentButtonsDiv = document.getElementById("instrument-buttons");
+            const mainMenuDiv = document.getElementById("main-menu");
+            const menuTitleH1 = document.getElementById("menu-title");
+            const levelSelectDiv = document.getElementById("level-select");
+            const quizContainerDiv = document.getElementById("quiz-container");
+            const quizTitleH1 = document.getElementById("quiz-title");
+            const feedbackDiv = document.getElementById("feedback");
+            const progressDiv = document.getElementById("progress");
+            const answerButtonsDiv = document.getElementById("answer-buttons");
+            const timerDisplay = document.getElementById("timer");
+            const completionMessageDiv = document.getElementById("completion-message");
+            const completionTitle = document.getElementById("completion-title");
+            
+            // --- Certificate Elements ---
+            const namePromptContainer = document.getElementById("name-prompt-container");
+            const studentNameInput = document.getElementById("student-name-input");
+            const submitNameBtn = document.getElementById("submit-name-btn");
+            const certificateText = document.getElementById("certificate-text");
+            const failureText = document.getElementById("failure-text");
+            
+            // --- Button Elements ---
+            const backToInstrumentsBtn = document.getElementById("back-to-instruments-btn");
+            const backToMenuBtn = document.getElementById("back-to-menu-btn");
+            const restartBtn = document.getElementById("restart-btn");
+
+            // --- Game Configuration & Data ---
+            const TOTAL_QUESTIONS = 50;
+            const CERTIFICATE_TIME_LIMIT = 90; // Time limit in seconds for certificate
+            const naturalAnswerNames = ["C", "D", "E", "F", "G", "A", "B"];
+            
+            const fluteLevel1 = [{ key: "e/4", name: "E" }, { key: "f/4", name: "F" }, { key: "g/4", name: "G" }, { key: "a/4", name: "A" }, { key: "b/4", name: "B" }, { key: "c/5", name: "C" }, { key: "d/5", name: "D" }, { key: "e/5", name: "E" }, { key: "f/5", name: "F" }];
+            const bassLevel1 = [ { key: "g/2", name: "G" }, { key: "a/2", name: "A" }, { key: "b/2", name: "B" }, { key: "c/3", name: "C" }, { key: "d/3", name: "D" }, { key: "e/3", name: "E" }, { key: "f/3", name: "F" }, { key: "g/3", name: "G" }, { key: "a/3", name: "A" } ];
+
+            const instruments = {
+                "Flute": {
+                    clef: "treble",
+                    levels: [
+                        { name: "Level 1", pool: fluteLevel1 },
+                        { name: "Level 2", pool: [{ key: "c/4", name: "C" }, { key: "d/4", name: "D" }, { key: "b/5", name: "B" }, { key: "c/6", name: "C" }] },
+                        { name: "Level 3", pool: [{ key: "f/5", name: "F" }, { key: "g/5", name: "G" }, { key: "a/5", name: "A" }, { key: "d/6", name: "D" }, { key: "e/6", name: "E" }, { key: "f/6", name: "F" }] },
+                        { name: "Level 4", pool: [{ key: "g/6", name: "G" }, { key: "a/6", name: "A" }, { key: "b/6", name: "B" }, { key: "c/7", name: "C" }] }
+                    ]
+                },
+                "Clarinet": {
+                    clef: "treble",
+                    levels: [
+                        { name: "Level 1", pool: fluteLevel1 },
+                        { name: "Level 2", pool: [] },
+                        { name: "Level 3", pool: [] },
+                        { name: "Level 4", pool: [] }
+                    ]
+                },
+                "Saxophone": {
+                    clef: "treble",
+                    levels: [
+                        { name: "Level 1", pool: fluteLevel1 },
+                        { name: "Level 2", pool: [] },
+                        { name: "Level 3", pool: [] },
+                        { name: "Level 4", pool: [] }
+                    ]
+                },
+                 "Trumpet": {
+                    clef: "treble",
+                    levels: [
+                        { name: "Level 1", pool: fluteLevel1 },
+                        { name: "Level 2", pool: [] },
+                        { name: "Level 3", pool: [] },
+                        { name: "Level 4", pool: [] }
+                    ]
+                },
+                "Oboe": {
+                    clef: "treble",
+                    levels: [
+                        { name: "Level 1", pool: fluteLevel1 },
+                        { name: "Level 2", pool: [] },
+                        { name: "Level 3", pool: [] },
+                        { name: "Level 4", pool: [] }
+                    ]
+                },
+                "Horn in F": {
+                    clef: "treble",
+                    levels: [
+                        { name: "Level 1", pool: fluteLevel1 },
+                        { name: "Level 2", pool: [] },
+                        { name: "Level 3", pool: [] },
+                        { name: "Level 4", pool: [] }
+                    ]
+                },
+                "Trombone": {
+                    clef: "bass",
+                    levels: [
+                        { name: "Level 1: In the Staff", pool: bassLevel1 },
+                        { name: "Level 2: Basic Ledger Lines", pool: [ { key: "f/2", name: "F" }, { key: "g/2", name: "G" }, { key: "a/2", name: "A" }, { key: "b/2", name: "B" }, { key: "c/3", name: "C" }, { key: "d/3", name: "D" }, { key: "e/3", name: "E" }, { key: "f/3", name: "F" }, { key: "g/3", name: "G" }, { key: "a/3", name: "A" }, { key: "b/3", name: "B" } ] },
+                        { name: "Level 3: Extended Range", pool: [ { key: "e/2", name: "E" }, { key: "f/2", name: "F" }, { key: "a/3", name: "A" }, { key: "b/3", name: "B" }, { key: "c/4", name: "C" }, { key: "d/4", name: "D" }, { key: "e/4", name: "E" }, { key: "f/4", name: "F" } ] },
+                        { name: "Level 4: High Range", pool: [ { key: "f/3", name: "F" }, { key: "g/3", name: "G" }, { key: "a/3", name: "A" }, { key: "b/3", name: "B" }, { key: "c/4", name: "C" }, { key: "d/4", name: "D" }, { key: "e/4", name: "E" }, { key: "f/4", name: "F" }, { key: "g/4", name: "G" } ] }
+                    ]
+                },
+                "Euphonium": {
+                    clef: "bass",
+                    levels: [
+                        { name: "Level 1", pool: bassLevel1 },
+                        { name: "Level 2", pool: [] },
+                        { name: "Level 3", pool: [] },
+                        { name: "Level 4", pool: [] }
+                    ]
+                },
+                "Bassoon": {
+                    clef: "bass",
+                    levels: [
+                        { name: "Level 1", pool: bassLevel1 },
+                        { name: "Level 2", pool: [] },
+                        { name: "Level 3", pool: [] },
+                        { name: "Level 4", pool: [] }
+                    ]
+                }
+            };
+            
+            // --- Game State Variables ---
+            let selectedInstrument = null;
+            let currentLevel = 1;
+            let currentCorrectAnswer = null;
+            let lastNoteKey = null; 
+            let currentQuestionIndex = 0;
+            let isCheckingAnswer = false;
+            let madeAMistake = false;
+            let startTime = 0;
+            let timerInterval;
+
+            // --- UI Navigation ---
+            function showScreen(screenId) {
+                instrumentSelectionDiv.classList.add("hidden");
+                mainMenuDiv.classList.add("hidden");
+                quizContainerDiv.classList.add("hidden");
+                completionMessageDiv.classList.add("hidden");
+                document.getElementById(screenId).classList.remove("hidden");
+            }
+
+            // --- Game Setup ---
+            function setupInstrumentSelection() {
+                instrumentButtonsDiv.innerHTML = '';
+                // Sort instruments alphabetically for better UI
+                const sortedInstrumentNames = Object.keys(instruments).sort();
+
+                sortedInstrumentNames.forEach(instrumentName => {
+                    const button = document.createElement("button");
+                    button.className = "btn";
+                    button.textContent = instrumentName;
+                    button.onclick = () => {
+                        selectedInstrument = instruments[instrumentName];
+                        setupLevelSelection();
+                    };
+                    instrumentButtonsDiv.appendChild(button);
+                });
+                showScreen("instrument-selection");
+            }
+            
+            function setupLevelSelection() {
+                menuTitleH1.textContent = `${Object.keys(instruments).find(key => instruments[key] === selectedInstrument)} Levels`;
+                levelSelectDiv.innerHTML = '';
+                selectedInstrument.levels.forEach((level, index) => {
+                    const levelNum = index + 1;
+                    const button = document.createElement("button");
+                    button.className = "btn";
+                    button.textContent = level.name;
+                    
+                    if (level.pool.length === 0) {
+                        button.disabled = true;
+                        button.classList.add('locked');
+                        button.textContent += ' (Coming Soon)';
+                    } else {
+                        button.onclick = () => setupQuiz(levelNum);
+                    }
+                    levelSelectDiv.appendChild(button);
+                });
+                showScreen("main-menu");
+            }
+
+            function setupQuiz(level) {
+                currentLevel = level;
+                const currentLevelData = selectedInstrument.levels[currentLevel - 1];
+                quizTitleH1.textContent = `${currentLevelData.name}`;
+                
+                answerButtonsDiv.innerHTML = ''; 
+                naturalAnswerNames.forEach(name => {
+                    const button = document.createElement("button");
+                    button.className = "btn";
+                    button.textContent = name;
+                    button.onclick = () => checkAnswer(name);
+                    answerButtonsDiv.appendChild(button);
+                });
+
+                currentQuestionIndex = 0;
+                lastNoteKey = null; 
+                madeAMistake = false;
+                
+                startTime = Date.now();
+                timerInterval = setInterval(() => {
+                    const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                    timerDisplay.textContent = `Time: ${elapsedTime}s`;
+                }, 100);
+
+                loadNextQuestion();
+                showScreen("quiz-container");
+            }
+
+            // --- Core Gameplay ---
+            function drawNote(noteKey) {
+                context.clear(); 
+                const stave = new Vex.Flow.Stave(20, 70, 150).addClef(selectedInstrument.clef).setContext(context).draw();
+                const note = new StaveNote({ clef: selectedInstrument.clef, keys: [noteKey], duration: "w" });
+                Formatter.FormatAndDraw(context, stave, [note]);
+            }
+            
+            function loadNextQuestion() {
+                if (currentQuestionIndex >= TOTAL_QUESTIONS) {
+                    showCompletionScreen();
+                    return;
+                }
+                isCheckingAnswer = false;
+                const notePool = selectedInstrument.levels[currentLevel - 1].pool;
+
+                let randomNote;
+                do {
+                    randomNote = notePool[Math.floor(Math.random() * notePool.length)];
+                } while (notePool.length > 1 && randomNote.key === lastNoteKey);
+
+                lastNoteKey = randomNote.key; 
+                currentCorrectAnswer = randomNote.name;
+                drawNote(randomNote.key);
+                
+                feedbackDiv.textContent = "";
+                feedbackDiv.className = "";
+                progressDiv.textContent = `Question ${currentQuestionIndex + 1} of ${TOTAL_QUESTIONS}`;
+            }
+
+            function checkAnswer(guessedNote) {
+                if (isCheckingAnswer) return;
+
+                if (guessedNote === currentCorrectAnswer) {
+                    isCheckingAnswer = true;
+                    feedbackDiv.textContent = "Correct!";
+                    feedbackDiv.className = "correct";
+                    currentQuestionIndex++;
+                    setTimeout(loadNextQuestion, 400); 
+                } else {
+                    madeAMistake = true;
+                    feedbackDiv.textContent = "Incorrect, try again!";
+                    feedbackDiv.className = "incorrect";
+                }
+            }
+
+            function showCompletionScreen() {
+                clearInterval(timerInterval); 
+                const totalTime = (Date.now() - startTime) / 1000;
+                const passedTimeLimit = totalTime < CERTIFICATE_TIME_LIMIT;
+
+                if (!madeAMistake && passedTimeLimit) {
+                    completionTitle.textContent = `🎉 Level Complete! 🎉`;
+                    studentNameInput.value = '';
+                    namePromptContainer.classList.remove('hidden');
+                    certificateText.classList.add('hidden');
+                    failureText.classList.add('hidden');
+                } else {
+                    completionTitle.textContent = `Almost!`;
+                    let reason = '';
+                    if (madeAMistake) {
+                        reason += 'You need 100% accuracy to get a certificate. ';
+                    }
+                    if (!passedTimeLimit) {
+                        reason += `You need to finish in under ${CERTIFICATE_TIME_LIMIT} seconds (your time was ${totalTime.toFixed(1)}s).`;
+                    }
+                    failureText.textContent = reason.trim() + " Please try again.";
+                    
+                    namePromptContainer.classList.add('hidden');
+                    certificateText.classList.add('hidden');
+                    failureText.classList.remove('hidden');
+                }
+                
+                showScreen("completion-message");
+            }
+
+            // --- Event Listeners ---
+            backToInstrumentsBtn.addEventListener("click", setupInstrumentSelection);
+            backToMenuBtn.addEventListener("click", setupLevelSelection);
+            restartBtn.addEventListener("click", setupLevelSelection);
+
+            submitNameBtn.addEventListener('click', () => {
+                const studentName = studentNameInput.value.trim();
+                if (!studentName) {
+                    alert("Please enter your name!");
+                    return;
+                }
+                
+                const levelName = selectedInstrument.levels[currentLevel - 1].name;
+                const instrumentName = Object.keys(instruments).find(key => instruments[key] === selectedInstrument);
+
+                certificateText.innerHTML = `Congratulations, ${studentName}!<br>You have completed: <br><strong>${instrumentName} - ${levelName}</strong>`;
+
+                namePromptContainer.classList.add('hidden');
+                certificateText.classList.remove('hidden');
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (quizContainerDiv.classList.contains('hidden')) return;
+                const key = event.key.toUpperCase();
+                if (naturalAnswerNames.includes(key)) checkAnswer(key);
+            });
+
+            // --- Initial Load ---
+            setupInstrumentSelection();
+        });
+    </script>
+</body>
+</html>
